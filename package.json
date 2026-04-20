@@ -1,0 +1,60 @@
+{
+	"name": "@hoststack.dev/sdk",
+	"version": "0.1.0",
+	"description": "Official TypeScript SDK for HostStack — deploy and manage web services, databases, cron jobs, and domains on European infrastructure. See https://hoststack.dev",
+	"keywords": [
+		"hoststack",
+		"paas",
+		"deploy",
+		"hosting",
+		"europe",
+		"hetzner",
+		"render",
+		"sdk",
+		"typescript",
+		"api-client"
+	],
+	"homepage": "https://hoststack.dev/docs/sdk",
+	"bugs": {
+		"url": "https://github.com/gethoststack/sdk/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/gethoststack/sdk.git"
+	},
+	"license": "MIT",
+	"author": "HostStack Contributors (https://hoststack.dev)",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"scripts": {
+		"build": "tsup",
+		"prepublishOnly": "bun run build",
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"tsup": "^8.3.5",
+		"typescript": "^5.8.3"
+	}
+}
