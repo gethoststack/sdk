@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { buildPaginationQuery, wrapArray } from '../pagination.ts';
+import { buildPaginationQuery } from '../pagination.ts';
 
 describe('buildPaginationQuery', () => {
 	test('returns empty string when params omitted', () => {
@@ -11,44 +11,34 @@ describe('buildPaginationQuery', () => {
 		expect(buildPaginationQuery({})).toBe('');
 	});
 
-	test('encodes limit only', () => {
-		expect(buildPaginationQuery({ limit: 20 })).toBe('?limit=20');
+	test('encodes page only', () => {
+		expect(buildPaginationQuery({ page: 2 })).toBe('?page=2');
 	});
 
-	test('encodes offset only', () => {
-		expect(buildPaginationQuery({ offset: 40 })).toBe('?offset=40');
+	test('encodes perPage only', () => {
+		expect(buildPaginationQuery({ perPage: 50 })).toBe('?perPage=50');
 	});
 
-	test('encodes both limit and offset', () => {
-		expect(buildPaginationQuery({ limit: 20, offset: 40 })).toBe('?limit=20&offset=40');
+	test('encodes both page and perPage', () => {
+		expect(buildPaginationQuery({ page: 3, perPage: 25 })).toBe('?page=3&perPage=25');
 	});
 
-	test('treats limit=0 as present', () => {
-		expect(buildPaginationQuery({ limit: 0 })).toBe('?limit=0');
-	});
-});
-
-describe('wrapArray', () => {
-	test('wraps an array with full metadata', () => {
-		const result = wrapArray([1, 2, 3]);
-		expect(result.items).toEqual([1, 2, 3]);
-		expect(result.total).toBe(3);
-		expect(result.limit).toBe(3);
-		expect(result.offset).toBe(0);
-		expect(result.hasMore).toBe(false);
+	test('treats page=0 as present', () => {
+		expect(buildPaginationQuery({ page: 0 })).toBe('?page=0');
 	});
 
-	test('respects explicit limit/offset', () => {
-		const result = wrapArray(['a', 'b'], { limit: 10, offset: 5 });
-		expect(result.limit).toBe(10);
-		expect(result.offset).toBe(5);
-		expect(result.items).toEqual(['a', 'b']);
-	});
-
-	test('empty array is fine', () => {
-		const result = wrapArray<string>([]);
-		expect(result.items).toHaveLength(0);
-		expect(result.total).toBe(0);
-		expect(result.hasMore).toBe(false);
+	test('serializes search + sort params alongside page/perPage', () => {
+		const qs = buildPaginationQuery({
+			page: 1,
+			perPage: 20,
+			search: 'foo',
+			sortBy: 'createdAt',
+			sortOrder: 'asc',
+		});
+		expect(qs).toContain('page=1');
+		expect(qs).toContain('perPage=20');
+		expect(qs).toContain('search=foo');
+		expect(qs).toContain('sortBy=createdAt');
+		expect(qs).toContain('sortOrder=asc');
 	});
 });

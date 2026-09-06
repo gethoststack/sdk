@@ -115,6 +115,6 @@ describe('streamLogsViaPolling', () => {
 			void _;
 		}
 
-		expect(paths[0]).toBe('/logs?lines=42');
+		expect(paths[0]).toBe('/logs?limit=42');
 	});
 });

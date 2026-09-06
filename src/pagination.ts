@@ -1,22 +1,34 @@
 /**
  * Standard pagination parameters for list requests.
+ *
+ * Mirrors `packages/shared/src/schemas/pagination.ts` — the API uses
+ * `page` (1-based) + `perPage` (≤100) everywhere. Use these names
+ * directly in your code; the SDK serializes them as the matching
+ * query-string params.
  */
 export interface PaginationParams {
-	/** Maximum number of items to return. */
-	limit?: number;
-	/** Number of items to skip. */
-	offset?: number;
+	/** 1-based page number. Default `1`. */
+	page?: number;
+	/** Items per page. Range 1–100, default `20`. */
+	perPage?: number;
+	/** Free-text search applied server-side. ≤200 chars. */
+	search?: string;
+	/** Column to sort by (route-dependent). */
+	sortBy?: string;
+	/** Sort direction. Default `'desc'`. */
+	sortOrder?: 'asc' | 'desc';
 }
 
 /**
- * A paginated response wrapper.
+ * A paginated response wrapper. Mirrors the shape every paginated API
+ * endpoint returns under `data` + `total` + `page` + `perPage` + `totalPages`.
  */
 export interface PaginatedResponse<T> {
-	items: T[];
+	data: T[];
 	total: number;
-	limit: number;
-	offset: number;
-	hasMore: boolean;
+	page: number;
+	perPage: number;
+	totalPages: number;
 }
 
 /**
@@ -26,27 +38,11 @@ export interface PaginatedResponse<T> {
 export function buildPaginationQuery(params?: PaginationParams): string {
 	if (!params) return '';
 	const qs = new URLSearchParams();
-	if (params.limit !== undefined) qs.set('limit', String(params.limit));
-	if (params.offset !== undefined) qs.set('offset', String(params.offset));
+	if (params.page !== undefined) qs.set('page', String(params.page));
+	if (params.perPage !== undefined) qs.set('perPage', String(params.perPage));
+	if (params.search !== undefined) qs.set('search', params.search);
+	if (params.sortBy !== undefined) qs.set('sortBy', params.sortBy);
+	if (params.sortOrder !== undefined) qs.set('sortOrder', params.sortOrder);
 	const str = qs.toString();
 	return str ? `?${str}` : '';
-}
-
-/**
- * Wraps a plain array result into a PaginatedResponse.
- * Useful when the API returns a flat array without pagination metadata.
- */
-export function wrapArray<T>(
-	items: T[],
-	params?: PaginationParams,
-): PaginatedResponse<T> {
-	const limit = params?.limit ?? items.length;
-	const offset = params?.offset ?? 0;
-	return {
-		items,
-		total: items.length,
-		limit,
-		offset,
-		hasMore: false,
-	};
 }

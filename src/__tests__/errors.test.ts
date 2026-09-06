@@ -1,11 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-	AuthenticationError,
-	HostStackError,
-	NotFoundError,
-	RateLimitError,
-} from '../errors.ts';
+import { AuthenticationError, HostStackError, NotFoundError, RateLimitError } from '../errors.ts';
 
 describe('SDK errors', () => {
 	test('HostStackError carries the status code + message', () => {

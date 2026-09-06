@@ -1,7 +1,12 @@
 export interface LogEntry {
 	timestamp: string;
-	level?: string | null;
-	stream?: string | null;
+	/**
+	 * Parsed log level if the message is a structured JSON envelope
+	 * (pino numeric, `{"level":"info"}`, or `{"severity":"WARNING"}`).
+	 * `undefined` for plain-text logs.
+	 */
+	level?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal' | null;
+	stream?: 'stdout' | 'stderr' | null;
 	message: string;
 }
 
@@ -42,7 +47,10 @@ export async function* streamLogsViaPolling(
 	const buildPath = (lines?: number, since?: string) => {
 		const params = new URLSearchParams();
 		if (options.stream) params.set('stream', options.stream);
-		if (lines !== undefined) params.set('lines', String(lines));
+		// v63 P5: backend now standardises on `limit` + `since`; we keep the
+		// `lines` SDK alias and pass it as `limit` so old + new wire formats
+		// both work.
+		if (lines !== undefined) params.set('limit', String(lines));
 		if (since) params.set('since', since);
 		const qs = params.toString();
 		return `${basePath}${qs ? `?${qs}` : ''}`;
@@ -88,12 +96,16 @@ function normalizeEntries(logs: LogEntry[] | string): LogEntry[] {
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	return new Promise((resolve, reject) => {
+	return new Promise((resolve) => {
 		const timer = setTimeout(resolve, ms);
 		if (signal) {
+			// Resolve (not reject) on abort: the poll loop checks
+			// `signal.aborted` right after the sleep and breaks cleanly, so
+			// the documented AbortController usage terminates the `for await`
+			// without throwing an AbortError at the consumer.
 			signal.addEventListener('abort', () => {
 				clearTimeout(timer);
-				reject(new DOMException('Aborted', 'AbortError'));
+				resolve();
 			});
 		}
 	});
