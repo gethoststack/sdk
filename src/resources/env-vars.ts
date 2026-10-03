@@ -2,7 +2,9 @@ import type { HostStack, IdInput } from '../client.ts';
 import type {
 	BulkSetEnvVarsInput,
 	CreateEnvVarInput,
+	EnvImportResult,
 	EnvVar,
+	ImportEnvFileInput,
 	UpdateEnvVarInput,
 } from '../types.ts';
 
@@ -63,5 +65,24 @@ export class EnvVarsResource {
 		const tid = await this.client.resolveId(teamId, { kind: 'team' });
 		const sid = await this.client.resolveId(serviceId, { kind: 'service', teamId: tid });
 		return this.client.request('PUT', `/api/services/${tid}/${sid}/env/bulk`, data);
+	}
+
+	/**
+	 * Import a `.env` file. The server reads it strictly and refuses any line
+	 * whose meaning depends on the reader — an unquoted `$` (a bcrypt hash), an
+	 * unquoted ` #`, a key written twice — with its line number. A dry run unless
+	 * `dryRun: false`. After an apply, every imported value is read back from
+	 * storage and compared byte for byte (`roundTrip`); platform variables and
+	 * templates are added at deploy, which is why the import refuses them. At
+	 * most 1000 variables per file. The result never contains a value.
+	 */
+	async importFile(
+		teamId: IdInput,
+		serviceId: IdInput,
+		data: ImportEnvFileInput,
+	): Promise<EnvImportResult> {
+		const tid = await this.client.resolveId(teamId, { kind: 'team' });
+		const sid = await this.client.resolveId(serviceId, { kind: 'service', teamId: tid });
+		return this.client.request('POST', `/api/services/${tid}/${sid}/env/import`, data);
 	}
 }

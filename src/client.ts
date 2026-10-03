@@ -90,6 +90,40 @@ type ResolveScope =
 	| { kind: 'cronExecution'; teamId: number; serviceId: number }
 	| { kind: 'devTask'; teamId: number };
 
+/**
+ * The human message of an error response. Most routes answer `{ error: string }`,
+ * but a request-validation failure answers `{ success: false, error: ZodError }`,
+ * whose `error` is an object; passed through as-is it printed `[object Object]`.
+ * Zod 4 serialises the issues as a JSON array in `error.message`.
+ */
+export function errorMessageOf(data: { error?: unknown }, status: number): string {
+	const error = data.error;
+	if (typeof error === 'string' && error.length > 0) return error;
+	if (typeof error === 'object' && error !== null) {
+		const { message, issues } = error as { message?: unknown; issues?: unknown };
+		let list: unknown = issues;
+		if (list === undefined && typeof message === 'string') {
+			try {
+				list = JSON.parse(message);
+			} catch {
+				return message;
+			}
+		}
+		if (Array.isArray(list) && list.length > 0) {
+			return list
+				.map((issue) => {
+					const { path, message: text } = issue as { path?: unknown; message?: unknown };
+					const where =
+						Array.isArray(path) && path.length > 0 ? `${path.join('.')}: ` : '';
+					return `${where}${typeof text === 'string' ? text : 'invalid'}`;
+				})
+				.join('; ');
+		}
+		if (typeof message === 'string') return message;
+	}
+	return `HTTP ${status}`;
+}
+
 export class HostStack {
 	private apiKey: string;
 	private baseUrl: string;
@@ -259,9 +293,9 @@ export class HostStack {
 			}
 
 			const data = (await res.json().catch(() => ({ error: 'Unknown error' }))) as {
-				error?: string;
+				error?: unknown;
 			};
-			const message = data.error ?? `HTTP ${res.status}`;
+			const message = errorMessageOf(data, res.status);
 
 			// 429 (rate-limited → rejected before processing) is safe to retry for
 			// any method; 5xx is only retried for idempotent methods (a mutating

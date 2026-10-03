@@ -74,6 +74,13 @@ export interface Service {
 	projectId: number;
 	/** Size tier (memory/CPU/disk bracket), e.g. "standard" / "large". Change via `services.resize`. */
 	plan?: string;
+	/** Where this service builds from — absent for an image-only service. */
+	repoProvider?: 'github' | 'gitlab' | 'bitbucket' | 'codeberg' | 'git_url';
+	/** Browsable URL of the repository this service builds. */
+	repoUrl?: string;
+	/** `"owner/name"` of that repository (GitLab reports its full path). */
+	repoFullName?: string;
+	branch?: string;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -88,10 +95,29 @@ export interface CreateServiceInput {
 	 * list envs with `client.environments.list(teamId, projectId)`.
 	 */
 	environmentId?: number;
-	/** Connect a previously-linked GitHub repo by id. Mutually exclusive with gitlabRepoId/bitbucketRepoId/dockerImage. */
+	/**
+	 * Connect a connected GitHub repo by its HostStack row id — NOT GitHub's own
+	 * repository id. Prefer `githubRepo` unless you already hold this number:
+	 * it is not derivable from anything GitHub shows you. Mutually exclusive
+	 * with gitlabRepoId/bitbucketRepoId/dockerImage.
+	 */
 	githubRepoId?: number;
+	/**
+	 * The same repo as `"owner/name"`, resolved server-side against the repos
+	 * this team's GitHub App installations expose. Mutually exclusive with
+	 * `githubRepoId`. A name that matches nothing is a 400 at create time
+	 * naming the field, rather than a deploy that fails on its clone.
+	 */
+	githubRepo?: string;
 	gitlabRepoId?: number;
 	bitbucketRepoId?: number;
+	/**
+	 * A public https git URL, for a repo that is not connected through a
+	 * provider. Carries no credentials — embedding them is rejected — so a
+	 * private repo needs `githubRepoId` instead. Mutually exclusive with the
+	 * provider repo ids and `dockerImage`.
+	 */
+	gitRepoUrl?: string;
 	branch?: string;
 	rootDirectory?: string;
 	installCommand?: string;
@@ -148,6 +174,21 @@ export interface CreateServiceInput {
 	 * migration rather than a setting.
 	 */
 	machineId?: number;
+	/**
+	 * Environment variables written inside the create, so the first deploy has
+	 * them. A key also set by the template overrides the template's value.
+	 */
+	envVars?: { key: string; value: string; isSecret?: boolean }[];
+	/**
+	 * Existing managed resources to connect before the first deploy, which
+	 * builds DATABASE_URL & co. from these links. A link the server refuses is
+	 * reported in the response's `linkErrors`; the service is still created.
+	 */
+	links?: {
+		resourceType: 'database' | 'object_storage' | 'queue' | 'search' | 'email_domain';
+		resourceId: number;
+		alias: string;
+	}[];
 }
 
 /** Companion managed services a standalone dev box can stand up alongside itself. */
@@ -442,6 +483,30 @@ export interface Database {
 	 * a row backed by a 3-node Patroni HA cluster. Only meaningful when
 	 * `engine === 'postgres'`. */
 	pgEngineType?: 'standalone' | 'patroni';
+	/**
+	 * Outcome of the most recent backup attempt.
+	 *
+	 * `offsite_failed` means the dump ran and the off-site upload was attempted
+	 * and failed — the archive exists only on the machine's own disk, which is
+	 * the thing a backup exists to survive. `failed` means no archive was
+	 * produced at all. Read `lastBackupError` for which, and prefer
+	 * `listRestorePoints` over this field for "is there something to restore
+	 * from": a restore point is evidence, a status is a report.
+	 */
+	lastBackupStatus?: 'success' | 'failed' | 'offsite_failed' | null;
+	/**
+	 * When a dump last COMPLETED — wherever it landed. On a machine of your own with no upload
+	 * grant, that is the disk being backed up, so this can be recent while nothing exists off
+	 * the machine. Read it against `lastOffsiteBackupAt`.
+	 */
+	lastBackupAt?: string | null;
+	/**
+	 * When an archive last reached off-site object storage. This is the one that means
+	 * "protected": `listRestorePoints` lists the archives behind it.
+	 */
+	lastOffsiteBackupAt?: string | null;
+	/** Plain-language reason the last backup failed, when it did. */
+	lastBackupError?: string | null;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -564,9 +629,20 @@ export interface Volume {
 	publicId: string;
 	name: string;
 	mountPath: string;
+	/** Provisioned size. 0 on an adopted volume: HostStack did not provision it. */
 	sizeGb: number;
 	status: 'pending' | 'active' | 'deleting';
 	serviceId: number;
+	/** Whether nightly off-site snapshots are being TAKEN. Not that any exist. */
+	backupEnabled: boolean;
+	/** Hetzner block storage — already triple-replicated, so backups are refused. */
+	blockBacked: boolean;
+	/**
+	 * An existing Docker volume on an infrastructure machine, mounted in place
+	 * rather than created. Backups can be turned on (they only read it); resize,
+	 * restore, import and delete are refused.
+	 */
+	adopted: boolean;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -586,10 +662,12 @@ export interface CreateVolumeInput {
 export interface UpdateVolumeInput {
 	mountPath?: string;
 	/** Off-site backups for this volume. Local docker volumes only — the API
-	 *  rejects enabling it on a block-backed volume. */
+	 *  rejects enabling it on a block-backed volume. Allowed on an adopted
+	 *  volume, which is the only field of one that is. */
 	backupEnabled?: boolean;
 	/** Grow the volume. 10–10240; a block volume can never shrink, and the
-	 *  API rejects a smaller value than the current size. */
+	 *  API rejects a smaller value than the current size. Refused on an
+	 *  adopted volume — its size is the machine's, not ours. */
 	sizeGb?: number;
 }
 
@@ -647,6 +725,33 @@ export interface UpdateEnvVarInput {
 
 export interface BulkSetEnvVarsInput {
 	vars: Array<{ key: string; value: string; target?: EnvVarTarget; isSecret?: boolean }>;
+}
+
+export interface ImportEnvFileInput {
+	/** The `.env` file, as text. Parsed on the server; see `EnvVarsResource.importFile`. */
+	content: string;
+	/** Defaults to true: nothing is written unless this is `false`. */
+	dryRun?: boolean;
+	/** `merge` (default) keeps keys the file does not mention; `replace` removes them. */
+	mode?: 'merge' | 'replace';
+	/** Defaults to `runtime`. */
+	target?: EnvVarTarget;
+	/** Defaults to true. */
+	isSecret?: boolean;
+}
+
+/** What an import did or would do. Keys and counts only — never a value. */
+export interface EnvImportResult {
+	dryRun: boolean;
+	applied: boolean;
+	mode: 'merge' | 'replace';
+	/** Lines refused as written, and why. Any refusal blocks an apply. */
+	refusals: Array<{ line: number; reason: string }>;
+	/** Advice that does not block an apply. */
+	warnings: Array<{ key: string; reason: string }>;
+	plan: Array<{ key: string; action: 'add' | 'change' | 'unchanged' | 'remove' }>;
+	/** After an apply: imported keys read back through the deploy-time resolution. */
+	roundTrip?: { verified: number; mismatched: string[] };
 }
 
 // --- Auth ---
@@ -799,6 +904,12 @@ export interface Machine {
 	/** `provisioning` until the installer runs, then `active` / `offline` as the
 	 *  agent connects and disconnects. */
 	status: string;
+	/** `byo` = the team's own hardware. `infra` = first-party infrastructure bound
+	 *  to one project (`infraProjectId`): only that project's services can be
+	 *  pinned to it, and only a HostStack operator can re-pair or remove it. */
+	kind: 'byo' | 'infra';
+	/** The project an `infra` machine is reserved for; null for `byo`. */
+	infraProjectId: number | null;
 	/** The installer has run and traded its pairing token for a credential.
 	 *  False means the machine was registered but never actually paired. */
 	enrolled: boolean;
@@ -830,6 +941,11 @@ export interface Machine {
 	agentUpdateFailedAt: string | null;
 	/** Consecutive failed update attempts. Reset to 0 by a successful one. */
 	agentUpdateFailures: number;
+	/** How the agent's previous run ended (an OOM kill, a crash, a stop), as
+	 *  the agent that replaced it reported it. Null until it has restarted. */
+	agentLastExit: string | null;
+	/** When that previous run ended. */
+	agentLastExitAt: string | null;
 	/** What is pinned to it right now. Removal is refused while anything is. */
 	workloads: { devBoxes: number; services: number; databases: number };
 }

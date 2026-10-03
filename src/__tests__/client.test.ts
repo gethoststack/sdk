@@ -145,6 +145,33 @@ describe('HostStack client', () => {
 		}
 	});
 
+	test('a request-validation 400 carries the issue text, never [object Object] (task 417)', async () => {
+		installMock(() => ({
+			status: 400,
+			body: {
+				success: false,
+				error: {
+					name: 'ZodError',
+					message: JSON.stringify([
+						{
+							code: 'invalid_format',
+							path: ['key'],
+							message: 'Key must start with a letter',
+						},
+					]),
+				},
+			},
+		}));
+		const client = new HostStack({ apiKey: 'hs_test_x', baseUrl: 'https://x.io' });
+		try {
+			await client.request('POST', '/api/ping', { key: '1A' });
+			throw new Error('expected throw');
+		} catch (err: unknown) {
+			expect(err).toBeInstanceOf(HostStackError);
+			expect((err as Error).message).toBe('key: Key must start with a letter');
+		}
+	});
+
 	test('returns undefined on 204 No Content', async () => {
 		installMock(() => ({ status: 204 }));
 		const client = new HostStack({ apiKey: 'hs_test_x', baseUrl: 'https://x.io' });

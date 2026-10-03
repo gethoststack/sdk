@@ -84,7 +84,11 @@ export class UptimeResource {
 	 *
 	 * Changing its shape resets the accumulated state: a check whose path or
 	 * expected status just changed has not observed the NEW check failing, and
-	 * carrying failures forward would alert on something never measured.
+	 * carrying failures forward would alert on something never measured. A write
+	 * that resolves to the shape already stored is a no-op and keeps that state —
+	 * note that `input` is defaults, not a partial edit, so leaving a field out
+	 * resolves it to the default rather than to what is stored. Read a check with
+	 * `get`, never by writing it.
 	 *
 	 * Only service types with a public URL can be checked (`web_service`,
 	 * `static_site`); anything else is refused with 400.
@@ -113,7 +117,12 @@ export class UptimeResource {
 	}
 
 	/**
-	 * Create or update the check on a site HostStack does not host.
+	 * Create or update the check on an analytics site.
+	 *
+	 * Mainly for a site HostStack does not host, but it works on one we do serve
+	 * too, and it is the only form that asserts ONE named hostname: a service
+	 * check follows whichever of the service's domains is primary. Same no-op
+	 * rule as `upsert`; read with `getForSite`.
 	 *
 	 * The site's domain must be PROVEN first — either linked to a domain this
 	 * team verified on a service, or verified directly with

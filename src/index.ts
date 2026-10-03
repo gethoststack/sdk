@@ -9,7 +9,7 @@ export {
 	RateLimitError,
 } from './errors.ts';
 export type { DeployListResponse, DeployLogEntry } from './resources/deploys.ts';
-export type { DnsRecord, DnsZone, UpsertDnsRecordInput } from './resources/dns.ts';
+export type { DelegationCheck, DnsRecord, DnsZone, UpsertDnsRecordInput } from './resources/dns.ts';
 export { DnsResource } from './resources/dns.ts';
 export { DevTasksResource } from './resources/dev-tasks.ts';
 export { MachinesResource } from './resources/machines.ts';
@@ -107,3 +107,5 @@ export type {
 	User,
 	Volume,
 } from './types.ts';
+export type { DatabaseRestorePoint } from './resources/databases.ts';
+export type { VolumeRestorePoint } from './resources/volumes.ts';

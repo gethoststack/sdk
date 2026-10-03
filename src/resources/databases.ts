@@ -6,6 +6,18 @@ import type {
 	UpdateDatabaseInput,
 } from '../types.ts';
 
+/** One dump of a managed database that actually reached object storage. */
+export interface DatabaseRestorePoint {
+	id: number;
+	databaseId: number;
+	/** Object-storage address of the archive, stored verbatim as the uploader reported it. */
+	s3Url: string;
+	archiveName: string;
+	/** `null` when the agent did not report a size (builds older than this listing). */
+	sizeBytes: number | null;
+	createdAt: string;
+}
+
 export class DatabasesResource {
 	constructor(private client: HostStack) {}
 
@@ -190,5 +202,28 @@ export class DatabasesResource {
 		const tid = await this.client.resolveId(teamId, { kind: 'team' });
 		const did = await this.client.resolveId(databaseId, { kind: 'database', teamId: tid });
 		return this.client.request('GET', `/api/databases/${tid}/${did}/cluster`);
+	}
+
+	/**
+	 * The archives this database can be restored from, newest first.
+	 *
+	 * The platform dumps nightly to off-site object storage; this says which of those dumps
+	 * EXIST. The two are worth checking together, because a schedule is a promise and this is
+	 * the evidence — a database whose dump has been failing since the first night looks
+	 * identical from the outside to one that has been backed up every night since.
+	 *
+	 * Only off-site archives are listed. A dump written onto the machine's own disk — which is
+	 * what happens on a machine of your own with no upload grant — is not a copy of anything
+	 * and is deliberately absent here.
+	 *
+	 * Capped at the most recent few, matching the retention the machine keeps.
+	 */
+	async listRestorePoints(
+		teamId: IdInput,
+		databaseId: IdInput,
+	): Promise<{ restorePoints: DatabaseRestorePoint[] }> {
+		const tid = await this.client.resolveId(teamId, { kind: 'team' });
+		const did = await this.client.resolveId(databaseId, { kind: 'database', teamId: tid });
+		return this.client.request('GET', `/api/databases/${tid}/${did}/restore-points`);
 	}
 }

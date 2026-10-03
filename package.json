@@ -1,6 +1,6 @@
 {
 	"name": "@hoststack.dev/sdk",
-	"version": "0.16.0",
+	"version": "0.22.0",
 	"description": "Official TypeScript SDK for HostStack — deploy and manage web services, databases, cron jobs, and domains on European infrastructure. See https://hoststack.dev",
 	"keywords": [
 		"hoststack",

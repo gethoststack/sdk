@@ -70,7 +70,14 @@ export class ServicesResource {
 	}
 
 	/** Create a new service. */
-	async create(teamId: IdInput, data: CreateServiceInput): Promise<{ service: Service }> {
+	async create(
+		teamId: IdInput,
+		data: CreateServiceInput,
+	): Promise<{
+		service: Service;
+		deployId?: number | null;
+		linkErrors?: { resourceType: string; resourceId: number; error: string }[];
+	}> {
 		const tid = await this.client.resolveId(teamId, { kind: 'team' });
 		return this.client.request('POST', `/api/services/${tid}`, data);
 	}

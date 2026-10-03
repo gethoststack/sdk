@@ -85,6 +85,12 @@ export interface AnalyticsSiteStatus {
 	/** The `Origin` header on that refusal, when the caller sent one. */
 	lastRefusalOrigin: string | null;
 	refusedRecently: AnalyticsRefusalCounts;
+	/**
+	 * Which origins were turned away for `bad_origin`, and how often, over the
+	 * same 7-day window. `lastRefusalOrigin` is only the newest refusal of any
+	 * reason, so it names the wrong thing whenever a bot refusal came later.
+	 */
+	refusedOrigins: Record<string, number>;
 	droppedCount: number;
 	quota: { usedThisHour: number; limitPerHour: number; hourResetsAt: string };
 	health: AnalyticsSiteHealth;
